@@ -12,16 +12,24 @@ import (
 	"strings"
 )
 
+var (
+	registry_addr string
+)
+
 func main() {
 	var (
 		bind          = flag.String("b", "127.0.0.1", "address to bind on")
 		port          = flag.String("p", "8080", "port to listen on")
 		cpus          = flag.Int("c", 1, "CPUs to use")
+		flAddr          = flag.String("registry", "localhost:5000", "address to prefix the `docker pull ...`")
 		registry_path = "/tmp"
 		err           error
 	)
 	flag.Parse()
 
+  if len(*flAddr) > 0 && !strings.HasSuffix(*flAddr,"/") {
+    registry_addr = *flAddr + "/"
+  }
 	runtime.GOMAXPROCS(*cpus)
 
 	if flag.NArg() > 0 {
@@ -47,9 +55,9 @@ func (ilm ImageListMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Fprintln(w, "<html><body><ul>")
-		for _, r := range repos {
-			name := filepath.Clean(filepath.Join(r.Namespace, r.Name))
-			fmt.Fprintf(w, "<li>%s:%s (hash %s))</li>", name, r.Tags[0].Name, r.Tags[0].HashID) // XXX
+		for _, repo := range repos {
+			name := filepath.Clean(filepath.Join(repo.Namespace, repo.Name))
+			fmt.Fprintf(w, "<li><b>docker pull %s%s:%s</b> (hash %s))</li>", registry_addr, name, repo.Tags[0].Name, repo.Tags[0].HashID) // XXX
 		}
 		fmt.Fprintln(w, "</ul></body></html>")
 	} else {
