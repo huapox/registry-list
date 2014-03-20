@@ -13,6 +13,6 @@ Install
 Usage
 ---
 
-	registry-list /var/lib/docker-registry
+	registry-list -b 0.0.0.0 -docker "youdomain.com:5000" /var/lib/docker-registry
 
 
