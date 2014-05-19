@@ -1,0 +1,40 @@
+table
+{
+    width: 100%;
+    border: none;
+}
+table td
+{
+}
+table th
+{
+    text-align: left;
+}
+table thead
+{
+    background-color: #EEE;
+}
+
+table .repository_name
+{
+    border-bottom: 1px solid black;
+}
+
+table thead th
+{
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+table thead th button
+{
+    font-weight: bold;
+    margin-right: 1em;
+}
+table td.pull_cmd
+{
+    padding-left: 20px;
+}
+
+
+

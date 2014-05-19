@@ -10,10 +10,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+    "time"
 )
 
 var (
 	registry_addr string
+    style_path string
+    script_path string
 )
 
 func main() {
@@ -23,6 +26,8 @@ func main() {
 		cpus          = flag.Int("c", 1, "CPUs to use")
 		flAddr          = flag.String("registry", "localhost:5000", "address to prefix the `docker pull ...`")
 		registry_path = "/tmp"
+        style         = flag.String("s", "./style.css", "path to style.css file")
+        script        = flag.String("j", "./script.js", "path to script.js file")
 		err           error
 	)
 	flag.Parse()
@@ -30,6 +35,8 @@ func main() {
   if len(*flAddr) > 0 && !strings.HasSuffix(*flAddr,"/") {
     registry_addr = *flAddr + "/"
   }
+    style_path = *style
+    script_path = *script
 	runtime.GOMAXPROCS(*cpus)
 
 	if flag.NArg() > 0 {
@@ -54,12 +61,34 @@ func (ilm ImageListMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-		fmt.Fprintln(w, "<html><body><ul>")
+
+        style_content, err := ioutil.ReadFile(style_path)
+        if err != nil { panic(err) }
+        script_content, err2 := ioutil.ReadFile(script_path)
+        if err2 != nil { panic(err2) }
+
+		fmt.Fprintln(w, "<html>");
+        fmt.Fprintf(w, "<head><style>%s</style><script src='//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js'></script><script>%s</script></head>", style_content, script_content);
+        fmt.Fprintln(w, "<body><a href='#' id='show_all'>Show all</a><table>")
+        last_namespace := ""
+        first := true
+        const layout = "Jan 2, 2006"
 		for _, repo := range repos {
+            if last_namespace != repo.Namespace {
+                if first {
+                    first = false
+                    fmt.Fprintf(w, "</tbody>")
+                }
+                namespace := ""
+                if repo.Namespace == "" {namespace = "No namespace"} else {namespace = repo.Namespace}
+                fmt.Fprintf(w, "<thead class='repository_name'><tr><th colspan='3'>%s</th></tr></thead><tbody>", namespace)
+                last_namespace = repo.Namespace
+
+            }
 			name := filepath.Clean(filepath.Join(repo.Namespace, repo.Name))
-			fmt.Fprintf(w, "<li><b>docker pull %s%s:%s</b> (hash %s))</li>", registry_addr, name, repo.Tags[0].Name, repo.Tags[0].HashID) // XXX
+			fmt.Fprintf(w, "<tr><td class='pull_cmd'><b>docker pull %s%s:%s</b></td><td> (hash %s))</td><td>%s</td></tr>", registry_addr, name, repo.Tags[0].Name, repo.Tags[0].HashID, repo.Time.Format(layout)) // XXX
 		}
-		fmt.Fprintln(w, "</ul></body></html>")
+		fmt.Fprintln(w, "</tbody></table></body></html>")
 	} else {
 		msg := fmt.Sprintf("TODO: handle %s", r.URL.String())
 		fmt.Fprintln(w, msg)
@@ -98,10 +127,12 @@ func NewRepoFromTagFile(path string) (Repo, error) {
 		return Repo{}, nil
 	}
 	chunks := strings.Split(filepath.Dir(path), "/")
+    info, err := os.Stat(path)
 	r := Repo{
 		Namespace: chunks[len(chunks)-2],
 		Name:      chunks[len(chunks)-1],
 		Tags:      []Tag{t},
+        Time:      info.ModTime(),
 	}
 	if r.Namespace == "library" {
 		r.Namespace = ""
@@ -112,6 +143,7 @@ func NewRepoFromTagFile(path string) (Repo, error) {
 type Repo struct {
 	Namespace, Name string
 	Tags            []Tag
+    Time            time.Time
 }
 
 func NewTag(path string) (Tag, error) {
