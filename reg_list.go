@@ -11,12 +11,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/vbatts/registry-list/assets"
 )
 
 var (
 	registry_addr string
-	style_path    string
-	script_path   string
 )
 
 func main() {
@@ -26,8 +26,8 @@ func main() {
 		cpus          = flag.Int("c", 1, "CPUs to use")
 		flAddr        = flag.String("registry", "localhost:5000", "address to prefix the `docker pull ...`")
 		registry_path = "/tmp"
-		style         = flag.String("s", "./style.css", "path to style.css file")
-		script        = flag.String("j", "./script.js", "path to script.js file")
+		style         = flag.String("s", "", "path to a local css file")
+		script        = flag.String("j", "", "path to a local js file")
 		err           error
 	)
 	flag.Parse()
@@ -35,8 +35,6 @@ func main() {
 	if len(*flAddr) > 0 && !strings.HasSuffix(*flAddr, "/") {
 		registry_addr = *flAddr + "/"
 	}
-	style_path = *style
-	script_path = *script
 	runtime.GOMAXPROCS(*cpus)
 
 	if flag.NArg() > 0 {
@@ -45,13 +43,15 @@ func main() {
 		}
 	}
 	addr := fmt.Sprintf("%s:%s", *bind, *port)
-	http.Handle("/", ImageListMux{registry_path})
+	http.Handle("/", ImageListMux{BaseDir: registry_path, StylePath: *style, ScriptPath: *script})
 	log.Printf("serving image list from %q listening on %s ...", registry_path, addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
 type ImageListMux struct {
-	BaseDir string
+	BaseDir    string
+	StylePath  string
+	ScriptPath string
 }
 
 func (ilm ImageListMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,13 +62,25 @@ func (ilm ImageListMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		style_content, err := ioutil.ReadFile(style_path)
-		if err != nil {
-			panic(err)
+		var (
+			style_content  []byte
+			script_content []byte
+		)
+		if len(ilm.StylePath) > 0 {
+			style_content, err = ioutil.ReadFile(ilm.StylePath)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			style_content = assets.CssStyle()
 		}
-		script_content, err2 := ioutil.ReadFile(script_path)
-		if err2 != nil {
-			panic(err2)
+		if len(ilm.ScriptPath) > 0 {
+			script_content, err = ioutil.ReadFile(ilm.ScriptPath)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			script_content = assets.JsScript()
 		}
 
 		fmt.Fprintln(w, "<html>")
